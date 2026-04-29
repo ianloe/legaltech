@@ -49,7 +49,7 @@ LexGuard is a professional-grade Contract Lifecycle Management (CLM) platform de
 1.  **Clone the repository**:
     ```bash
     git clone <repository-url>
-    cd legaltech
+    cd lexguardclm
     ```
 
 2.  **Build and Start the Container**:
