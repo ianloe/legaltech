@@ -16,7 +16,7 @@ import { USERS, INITIAL_PLAYBOOK, PlaybookClause, AuditLogEntry, User, Contract,
 const dmp = new diff_match_patch();
 
 const MOCK_CONTRACTS: Contract[] = [
-  { id: 'c1', title: 'Global Vendor Agreement', content: "This Agreement is dated 2024. The parties agree as follows:\n\n1. GOVERNING LAW: This contract is governed by the laws of New York.\n\n2. LIABILITY: The total liability of the parties shall be unlimited in all circumstances.\n\n3. TERMINATION: Either party can terminate this agreement instantly without notice.", lastModifiedBy: 'Ian Loe', status: 'Live', expiryDate: '2024-12-15', value: '$250k', businessUnit: 'Retail', department: 'Procurement', legalRep: 'Sarah Chen', category: 'Vendor' },
+  { id: 'c1', title: 'Global Vendor Agreement', content: "This Agreement is dated 2024. The parties agree as follows:\n\n1. GOVERNING LAW: This contract is governed by the laws of New York.\n\n2. LIMITATION OF LIABILITY: The total liability of the parties shall be unlimited in all circumstances.\n\n3. TERMINATION FOR CONVENIENCE: Either party can terminate this agreement instantly without notice.", lastModifiedBy: 'Ian Loe', status: 'Live', expiryDate: '2024-12-15', value: '$250k', businessUnit: 'Retail', department: 'Procurement', legalRep: 'Sarah Chen', category: 'Vendor' },
   { id: 'c2', title: 'Software License - Adobe', content: "Adobe license content...", lastModifiedBy: 'Sarah Chen', status: 'Review', expiryDate: '2025-01-10', value: '$50k', businessUnit: 'Tech', department: 'IT', legalRep: 'Ian Loe', category: 'IT' },
 ];
 
@@ -38,6 +38,7 @@ const App: React.FC = () => {
     { id: 'v1', contractId: 'c1', content: MOCK_CONTRACTS[0].content, timestamp: new Date(Date.now() - 86400).toISOString(), author: 'System', label: 'Baseline' },
   ]);
   const [isDiffMode, setIsDiffMode] = useState(false);
+  const [isHighlightMode, setIsHighlightMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [repoFilter, setRepoFilter] = useState({ bu: 'All', status: 'All' });
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
@@ -73,10 +74,11 @@ const App: React.FC = () => {
       playbook.forEach(p => {
         if (!p?.title || !p?.preferredLanguage) return;
         const lowerT = String(p.title || "").toLowerCase();
-        if (lowerC.includes(lowerT)) {
+        const foundIndex = lowerC.indexOf(lowerT);
+        if (foundIndex !== -1) {
           const lowerP = String(p.preferredLanguage || "").toLowerCase().substring(0, 20);
           if (!lowerC.includes(lowerP)) {
-            results.push({ clauseId: p.id, index: content.indexOf(p.title) });
+            results.push({ clauseId: p.id, index: foundIndex });
           }
         }
       });
@@ -122,14 +124,33 @@ const App: React.FC = () => {
     } catch (e) { return <span>{current}</span>; }
   };
 
-
-
-
-
-
-
-
-  // --- Main Layout ---
+  const renderHighlights = (content: string) => {
+    if (!content) return null;
+    let lastIndex = 0;
+    const elements: React.ReactNode[] = [];
+    const sortedConflicts = [...conflicts].sort((a, b) => a.index - b.index);
+    
+    sortedConflicts.forEach((c, i) => {
+      const p = playbook.find(x => x.id === c.clauseId);
+      if (!p) return;
+      elements.push(content.substring(lastIndex, c.index));
+      elements.push(
+        <span key={`highlight-${i}`} className="px-1 rounded bg-purple-500/20 border border-purple-500/40 cursor-help group relative inline-block">
+          {content.substring(c.index, c.index + p.title.length)}
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-[100] transform scale-95 group-hover:scale-100">
+             <div className="flex items-center gap-2 mb-2"><Sparkles size={12} className="text-purple-400" /><p className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">AI Intelligence Flag</p></div>
+             <p className="text-[11px] text-white font-bold mb-1">{p.title}</p>
+             <p className="text-[10px] text-slate-400 leading-relaxed mb-3">{p.description}</p>
+             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/50"><p className="text-[9px] font-bold text-slate-600 uppercase mb-1">Canonical Baseline</p><p className="text-[10px] text-blue-400 italic font-mono leading-relaxed">"{p.preferredLanguage.substring(0, 100)}..."</p></div>
+             <div className="mt-3 flex items-center gap-2 text-[9px] font-bold text-purple-500"><Zap size={10} /> Click "Apply Smart Fix" in sidebar to resolve</div>
+          </div>
+        </span>
+      );
+      lastIndex = c.index + p.title.length;
+    });
+    elements.push(content.substring(lastIndex));
+    return elements;
+  };
 
   if (!isAuthenticated) {
     return (
@@ -564,7 +585,8 @@ const App: React.FC = () => {
                          </div>
                          <div className="flex gap-3">
                             <button onClick={saveContract} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-lg transition-all shadow-lg" title="Save Draft"><Save size={18} /></button>
-                            <button onClick={() => setIsDiffMode(!isDiffMode)} title="Toggle Redlining" className={`p-2 rounded-lg transition-all shadow-lg ${isDiffMode ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}><FileDiff size={18} /></button>
+                            <button onClick={() => { setIsHighlightMode(!isHighlightMode); if(isDiffMode) setIsDiffMode(false); }} title="Conflict Intelligence" className={`p-2 rounded-lg transition-all shadow-lg ${isHighlightMode ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}><Zap size={18} /></button>
+                            <button onClick={() => { setIsDiffMode(!isDiffMode); if(isHighlightMode) setIsHighlightMode(false); }} title="Toggle Redlining" className={`p-2 rounded-lg transition-all shadow-lg ${isDiffMode ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}><FileDiff size={18} /></button>
                             <button onClick={() => {
                                setIsAISummarizing(true);
                                setTimeout(() => { setAiSummary("Intelligence Report: 100% clause alignment detected for Standard Vendor Terms. No anomalous risk signatures found in Section 2. Governing Law matches Singapore standard. Recommendation: Proceed to final signature."); setIsAISummarizing(false); addLogEntry('AI Analysis', `Generated deep summary for ${currentContract?.title}`); }, 1500);
@@ -584,6 +606,8 @@ const App: React.FC = () => {
                       <div className="glass-card rounded-[2.5rem] border border-slate-800 flex-1 relative overflow-hidden bg-slate-900/10 min-h-[600px] shadow-2xl flex flex-col">
                          {isDiffMode ? (
                             <div className="flex-1 p-12 overflow-y-auto whitespace-pre-wrap font-mono text-lg leading-relaxed text-slate-300 scrollbar-hide">{renderRedlines(versions?.[0]?.content || "", contractContent)}</div>
+                         ) : isHighlightMode ? (
+                            <div className="flex-1 p-12 overflow-y-auto whitespace-pre-wrap font-mono text-lg leading-relaxed text-slate-300 scrollbar-hide">{renderHighlights(contractContent)}</div>
                          ) : (
                             <textarea value={contractContent} onChange={(e) => setContractContent(e.target.value)} className="w-full h-full p-12 bg-transparent border-none outline-none resize-none text-slate-300 font-mono text-lg leading-relaxed placeholder-slate-700 scrollbar-hide" placeholder="Start drafting or use Smart Suggest to populate content..." />
                          )}
@@ -612,7 +636,15 @@ const App: React.FC = () => {
                                  <motion.div key={i} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} className="p-5 bg-slate-950/80 border border-purple-500/20 rounded-2xl space-y-3 transition-all hover:border-purple-500/50 group/item shadow-lg">
                                    <div className="flex justify-between items-start"><h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">{p?.title}</h4><AlertTriangle size={12} className="text-amber-500 animate-pulse" /></div>
                                    <p className="text-[10px] text-slate-400 italic leading-relaxed">Language deviates from standard playbook benchmarks.</p>
-                                   <button onClick={() => { if(p) { setContractContent(contractContent.replace(p.title, `${p.title}\n\n${p.preferredLanguage}`)); addLogEntry('AI Remediation', `Autonomous fix applied to ${p.title}`); } }} className="w-full py-2.5 bg-purple-600/90 hover:bg-purple-600 text-white text-[10px] font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-purple-900/40 flex items-center justify-center gap-2">Apply Smart Fix <Wand2 size={12} /></button>
+                                    <button onClick={() => { 
+                                      if(p) { 
+                                        const escapedTitle = p.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                        // Match title followed by optional colon, dash, and spaces until newline or end of string
+                                        const regex = new RegExp(`${escapedTitle}[:\\s-]*.*`, 'i');
+                                        setContractContent(contractContent.replace(regex, `${p.title}\n${p.preferredLanguage}`)); 
+                                        addLogEntry('AI Remediation', `Autonomous fix applied to ${p.title}`); 
+                                      } 
+                                    }} className="w-full py-2.5 bg-purple-600/90 hover:bg-purple-600 text-white text-[10px] font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-purple-900/40 flex items-center justify-center gap-2">Apply Smart Fix <Wand2 size={12} /></button>
                                  </motion.div>
                                );
                             })}
