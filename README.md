@@ -65,4 +65,4 @@ LexGuard enforces strict accountability through its Forensic Audit Trail. Every 
 
 ---
 **Developed for High-Stakes Legal Operations.**
-© 2026 LexGuard Intelligence Systems.
+© 2026 Ian Loe.
