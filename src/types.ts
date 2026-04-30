@@ -1,6 +1,8 @@
 export interface User {
   id: string;
   name: string;
+  email?: string;
+  password?: string; // In a real app, this would be a hash on the server
   role: string;
   color: string;
   allowedBUs?: string[]; // Empty means all
@@ -47,11 +49,11 @@ export interface Version {
 }
 
 export const USERS: User[] = [
-  { id: '1', name: 'Ian Loe', role: 'General Counsel', color: '#3b82f6' },
-  { id: '2', name: 'Sarah Chen', role: 'Legal Operations', color: '#10b981' },
-  { id: '3', name: 'Marcus Bell', role: 'Contract Manager', color: '#f59e0b' },
-  { id: '4', name: 'Elena Rodriguez', role: 'Senior Associate', color: '#8b5cf6' },
-  { id: '5', name: 'David Kim', role: 'Compliance Officer', color: '#ec4899' },
+  { id: '1', name: 'Ian Loe', email: 'ian@lexguard.ai', password: 'password123', role: 'General Counsel', color: '#3b82f6' },
+  { id: '2', name: 'Sarah Chen', email: 'sarah@lexguard.ai', password: 'password123', role: 'Legal Operations', color: '#10b981' },
+  { id: '3', name: 'Marcus Bell', email: 'marcus@lexguard.ai', password: 'password123', role: 'Contract Manager', color: '#f59e0b' },
+  { id: '4', name: 'Elena Rodriguez', email: 'elena@lexguard.ai', password: 'password123', role: 'Senior Associate', color: '#8b5cf6' },
+  { id: '5', name: 'David Kim', email: 'david@lexguard.ai', password: 'password123', role: 'Compliance Officer', color: '#ec4899' },
 ];
 
 export const INITIAL_PLAYBOOK: PlaybookClause[] = [

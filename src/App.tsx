@@ -22,7 +22,11 @@ const MOCK_CONTRACTS: Contract[] = [
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'contract' | 'repository' | 'playbook' | 'users' | 'settings' | 'audit'>('dashboard');
-  const [currentUser, setCurrentUser] = useState<User>(USERS?.[0] || { id: '1', name: 'User', role: 'Staff', color: '#333' });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [passwordChange, setPasswordChange] = useState({ current: '', new: '', confirm: '' });
+  const [showPasswordSuccess, setShowPasswordSuccess] = useState(false);
   const [playbook, setPlaybook] = useState<PlaybookClause[]>(INITIAL_PLAYBOOK || []);
   const [contracts, setContracts] = useState<Contract[]>(MOCK_CONTRACTS || []);
   const [appUsers, setAppUsers] = useState<User[]>(USERS || []);
@@ -49,7 +53,14 @@ const App: React.FC = () => {
   const [showTagModal, setShowTagModal] = useState<{ type: 'BUs' | 'Depts' | 'Categories', value?: string, original?: string } | null>(null);
 
   const addLogEntry = (action: string, details: string) => {
-    const entry: AuditLogEntry = { id: Math.random().toString(36).substr(2, 9), timestamp: new Date().toISOString(), userId: currentUser.id, userName: currentUser.name, action, details };
+    const entry: AuditLogEntry = { 
+      id: Math.random().toString(36).substr(2, 9), 
+      timestamp: new Date().toISOString(), 
+      userId: currentUser?.id || 'system', 
+      userName: currentUser?.name || 'System', 
+      action, 
+      details 
+    };
     setAuditLog([entry, ...auditLog]);
   };
 
@@ -77,7 +88,7 @@ const App: React.FC = () => {
 
   const saveContract = () => {
     if (!currentContract) return;
-    const next = contracts.map(c => c.id === currentContract.id ? { ...currentContract, content: contractContent, lastModifiedBy: currentUser.name } : c);
+    const next = contracts.map(c => c.id === currentContract.id ? { ...currentContract, content: contractContent, lastModifiedBy: currentUser?.name || 'Unknown' } : c);
     setContracts(next);
     addLogEntry('Document Save', `Updated version of ${currentContract.title}`);
     alert('Contract saved successfully!');
@@ -111,203 +122,102 @@ const App: React.FC = () => {
     } catch (e) { return <span>{current}</span>; }
   };
 
-  const Dashboard = () => {
-    const acc = getAccessible();
-    return (
-      <div className="space-y-8 animate-fade-in">
-        <div className="flex items-center justify-between">
-           <div><h2 className="text-3xl font-bold text-white">Intelligence Dashboard</h2><p className="text-slate-500">Global Legal Operations</p></div>
-           <div className="flex gap-2 bg-purple-500/10 p-2 rounded-xl border border-purple-500/20"><Sparkles className="text-purple-500 animate-pulse" size={16} /><span className="text-[10px] font-bold text-purple-400 uppercase">AI Reviewer Active</span></div>
-        </div>
-        <div className="grid grid-cols-4 gap-6">
-          {[
-            { label: 'In Queue', val: acc.filter(c => c.status === 'In Queue').length, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-            { label: 'Live', val: acc.filter(c => c.status === 'Live').length, icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10' },
-            { label: 'Reviewing', val: acc.filter(c => c.status === 'Review').length, icon: Eye, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-            { label: 'Conflicts', val: conflicts.length, icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-500/10' }
-          ].map((s, i) => (
-            <div key={i} className="glass-card p-6 rounded-2xl border border-slate-800 transition-all hover:scale-105">
-               <div className={`w-12 h-12 ${s.bg} rounded-xl flex items-center justify-center mb-4`}><s.icon className={s.color} size={24} /></div>
-               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{s.label}</p>
-               <h3 className="text-4xl font-bold text-white mt-1">{s.val}</h3>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-12 gap-8">
-           <div className="col-span-8 glass-card rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-              <div className="p-6 border-b border-slate-800 bg-slate-900/20 flex items-center justify-between"><h3 className="text-lg font-bold text-white">Active Repository</h3><Search size={16} className="text-slate-500" /></div>
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-900/50 text-slate-500 text-[10px] uppercase font-bold tracking-widest">
-                   <tr><th className="px-6 py-4">Contract</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">BU</th><th className="px-6 py-4 text-right">Value</th></tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                   {filtered.map(c => (
-                     <tr key={c.id} className="hover:bg-slate-900/40 cursor-pointer group" onClick={() => { setCurrentContract(c); setContractContent(c.content || ""); setActiveTab('contract'); }}>
-                       <td className="px-6 py-4 font-bold text-white group-hover:text-blue-400 transition-colors">{c.title}</td>
-                       <td className="px-6 py-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${c.status === 'Live' ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-500'}`}>{c.status}</span></td>
-                       <td className="px-6 py-4 text-slate-500">{c.businessUnit}</td>
-                       <td className="px-6 py-4 text-right font-mono text-blue-400">{c.value}</td>
-                     </tr>
-                   ))}
-                </tbody>
-              </table>
-           </div>
-           <div className="col-span-4 space-y-6">
-              <div className="glass-card p-6 rounded-2xl border border-slate-800 shadow-xl">
-                 <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2"><PieChart className="text-purple-500" size={20} /> Compliance Pulse</h3>
-                 <div className="space-y-4">
-                    <div><div className="flex justify-between text-[10px] font-bold uppercase text-slate-500 mb-2"><span>Standardization</span><span>88%</span></div><div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-green-500 w-[88%]" /></div></div>
-                    <div><div className="flex justify-between text-[10px] font-bold uppercase text-slate-500 mb-2"><span>Risk Exposure</span><span>Medium</span></div><div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-amber-500 w-[45%]" /></div></div>
-                 </div>
-              </div>
-              <div className="glass-card p-6 rounded-2xl border border-slate-800 shadow-xl">
-                 <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2"><Activity className="text-blue-500" size={20} /> Event Stream</h3>
-                 <div className="space-y-4">
-                    {auditLog.slice(0, 4).map(log => (
-                       <div key={log.id} className="flex gap-3"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5" /><div><p className="text-xs text-white font-medium">{log.action}</p><p className="text-[10px] text-slate-500">{new Date(log.timestamp).toLocaleTimeString()}</p></div></div>
-                    ))}
-                    {auditLog.length === 0 && <p className="text-xs text-slate-600 italic">Listening for system events...</p>}
-                 </div>
-              </div>
-           </div>
-        </div>
-      </div>
-    );
-  };
 
-  const RepositoryView = () => (
-    <div className="space-y-8 animate-fade-in">
-       <div className="flex items-center justify-between">
-          <h2 className="text-3xl font-bold text-white">Digital Vault</h2>
-          <div className="flex gap-4">
-             <select value={repoFilter.bu} onChange={e => setRepoFilter({...repoFilter, bu: e.target.value})} className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-300 outline-none focus:ring-1 focus:ring-purple-500 transition-all">
-                <option value="All">All Business Units</option>
-                {tags.BUs.map(bu => <option key={bu} value={bu}>{bu}</option>)}
-             </select>
-          </div>
-       </div>
-       <div className="grid grid-cols-1 gap-4">
-          {filtered.map(c => (
-             <div key={c.id} className="glass-card p-6 rounded-2xl border border-slate-800 hover:border-blue-600 transition-all cursor-pointer flex items-center justify-between group" onClick={() => { setCurrentContract(c); setContractContent(c.content || ""); setActiveTab('contract'); }}>
-                <div className="flex items-center gap-6">
-                   <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><FolderOpen size={24} /></div>
-                   <div><h4 className="font-bold text-white text-lg group-hover:text-blue-400 transition-colors">{c.title}</h4><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{c.businessUnit} • {c.department} • {c.category || 'Standard'}</p></div>
-                </div>
-                <div className="flex items-center gap-8">
-                   <div className="text-right hidden sm:block"><p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Last Modified By</p><p className="text-xs text-slate-300 font-medium">{c.lastModifiedBy}</p></div>
-                   <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${c.status === 'Live' ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-500'}`}>{c.status}</span>
-                   <ChevronRight className="text-slate-700 group-hover:text-white transition-colors" />
-                </div>
-             </div>
-          ))}
-       </div>
-    </div>
-  );
 
-  const PlaybookView = () => (
-    <div className="animate-fade-in space-y-8">
-       <div className="flex items-center justify-between">
-          <h2 className="text-3xl font-bold text-white">Playbook Architecture</h2>
-          <button onClick={() => { setEditingClause({ id: Math.random().toString(36).substr(2, 9), title: '', description: '', preferredLanguage: '', riskLevel: 'Low' }); setShowPlaybookModal(true); }} className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-500/20 transition-all hover:scale-105 active:scale-95"><PlusCircle size={16} /> Define Clause</button>
-       </div>
-       <div className="grid grid-cols-3 gap-6">
-          {playbook.map(p => (
-             <div key={p.id} className="glass-card p-6 rounded-2xl border border-slate-800 group relative overflow-hidden transition-all hover:border-purple-600/50">
-                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-all flex gap-2">
-                   <button onClick={() => { setEditingClause(p); setShowPlaybookModal(true); }} className="p-1.5 bg-slate-800 rounded hover:text-white transition-colors shadow-lg"><Edit2 size={14} /></button>
-                   <button onClick={() => { setPlaybook(playbook.filter(x => x.id !== p.id)); addLogEntry('Playbook Delete', `Removed clause: ${p.title}`); }} className="p-1.5 bg-slate-800 rounded hover:text-red-500 transition-colors shadow-lg"><Trash2 size={14} /></button>
-                </div>
-                <div className={`text-[8px] font-bold px-2 py-0.5 rounded-full uppercase mb-4 inline-block tracking-widest ${p.riskLevel === 'High' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20'}`}>{p.riskLevel} Risk</div>
-                <h4 className="font-bold text-white mb-2">{p.title}</h4>
-                <p className="text-xs text-slate-500 mb-4 line-clamp-3 leading-relaxed">{p.description}</p>
-                <div className="p-4 bg-slate-950/50 rounded-xl text-[10px] text-blue-400 font-mono italic border border-slate-800 group-hover:border-purple-500/30 transition-all">"{p.preferredLanguage}"</div>
-             </div>
-          ))}
-       </div>
-    </div>
-  );
 
-  const IdentityView = () => (
-    <div className="animate-fade-in space-y-8">
-       <div className="flex items-center justify-between">
-          <h2 className="text-3xl font-bold text-white">Identity Governance</h2>
-          <button onClick={() => { setEditingUser({ id: Math.random().toString(36).substr(2, 9), name: '', role: '', color: '#3b82f6', allowedBUs: [] }); setShowUserModal(true); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all hover:scale-105"><UserPlus size={16} /> Invite Member</button>
-       </div>
-       <div className="glass-card rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-          <table className="w-full text-left text-sm">
-             <thead className="bg-slate-900/50 text-slate-500 text-[10px] uppercase font-bold tracking-widest">
-                <tr><th className="px-6 py-4">Identity</th><th className="px-6 py-4">Role</th><th className="px-6 py-4">BU Restrictions</th><th className="px-6 py-4 text-right">Actions</th></tr>
-             </thead>
-             <tbody className="divide-y divide-slate-800">
-                {appUsers.map(u => (
-                   <tr key={u.id} className="hover:bg-slate-900/40 group transition-colors">
-                      <td className="px-6 py-4 font-bold text-white flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg" style={{ backgroundColor: u.color }}>{u.name?.[0]}</div>{u.name}</td>
-                      <td className="px-6 py-4 text-slate-400 font-medium">{u.role}</td>
-                      <td className="px-6 py-4">
-                         <div className="flex flex-wrap gap-1">
-                            {(u.allowedBUs || []).map(bu => <span key={bu} className="px-2 py-0.5 bg-blue-500/10 text-blue-500 rounded text-[8px] font-bold border border-blue-500/20">{bu}</span>)}
-                            {(!u.allowedBUs || u.allowedBUs.length === 0) && <span className="text-[8px] text-slate-600 font-bold uppercase italic tracking-widest">Global Access</span>}
-                         </div>
-                      </td>
-                      <td className="px-6 py-4 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                         <div className="flex justify-end gap-2">
-                            <button onClick={() => { setEditingUser(u); setShowUserModal(true); }} className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all"><Edit2 size={14} /></button>
-                            <button onClick={() => { setAppUsers(appUsers.filter(x => x.id !== u.id)); addLogEntry('Identity Revoke', `Revoked access for: ${u.name}`); }} className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-red-500 transition-all"><Trash2 size={14} /></button>
-                         </div>
-                      </td>
-                   </tr>
-                ))}
-             </tbody>
-          </table>
-       </div>
-    </div>
-  );
 
-  const SettingsView = () => (
-    <div className="animate-fade-in space-y-8 max-w-5xl">
-       <h2 className="text-3xl font-bold text-white">Global Taxonomy</h2>
-       <div className="grid grid-cols-3 gap-8">
-          <div className="glass-card p-6 rounded-2xl border border-slate-800 shadow-xl">
-             <div className="flex items-center justify-between mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Building size={18} className="text-blue-500" /> Business Units</h3><button onClick={() => setShowTagModal({ type: 'BUs' })} className="text-blue-500 hover:text-blue-400 transition-colors"><Plus size={20} /></button></div>
-             <div className="space-y-2">{tags.BUs.map(bu => <div key={bu} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl group transition-all hover:border-blue-500/30"><span className="text-xs text-slate-300 font-medium">{bu}</span><button onClick={() => setTags({...tags, BUs: tags.BUs.filter(x => x !== bu)})} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-500 transition-opacity"><X size={14} /></button></div>)}</div>
-          </div>
-          <div className="glass-card p-6 rounded-2xl border border-slate-800 shadow-xl">
-             <div className="flex items-center justify-between mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Layers size={18} className="text-purple-500" /> Departments</h3><button onClick={() => setShowTagModal({ type: 'Depts' })} className="text-purple-500 hover:text-purple-400 transition-colors"><Plus size={20} /></button></div>
-             <div className="space-y-2">{tags.Depts.map(d => <div key={d} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl group transition-all hover:border-purple-500/30"><span className="text-xs text-slate-300 font-medium">{d}</span><button onClick={() => setTags({...tags, Depts: tags.Depts.filter(x => x !== d)})} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-500 transition-opacity"><X size={14} /></button></div>)}</div>
-          </div>
-          <div className="glass-card p-6 rounded-2xl border border-slate-800 shadow-xl">
-             <div className="flex items-center justify-between mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Tag size={18} className="text-amber-500" /> Categories</h3><button onClick={() => setShowTagModal({ type: 'Categories' })} className="text-amber-500 hover:text-amber-400 transition-colors"><Plus size={20} /></button></div>
-             <div className="space-y-2">{tags.Categories.map(c => <div key={c} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl group transition-all hover:border-amber-500/30"><span className="text-xs text-slate-300 font-medium">{c}</span><button onClick={() => setTags({...tags, Categories: tags.Categories.filter(x => x !== c)})} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-500 transition-opacity"><X size={14} /></button></div>)}</div>
-          </div>
-       </div>
-    </div>
-  );
 
-  const AuditView = () => (
-    <div className="animate-fade-in space-y-8">
-       <h2 className="text-3xl font-bold text-white flex items-center gap-3"><Terminal className="text-blue-500" /> Forensic Audit Trail</h2>
-       <div className="glass-card rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-          <table className="w-full text-left text-sm">
-             <thead className="bg-slate-900/50 text-slate-500 text-[10px] uppercase font-bold tracking-widest">
-                <tr><th className="px-6 py-4">Event Time</th><th className="px-6 py-4">Actor</th><th className="px-6 py-4">Action Type</th><th className="px-6 py-4 text-right">Details</th></tr>
-             </thead>
-             <tbody className="divide-y divide-slate-800 font-mono">
-                {auditLog.map(log => (
-                   <tr key={log.id} className="hover:bg-slate-900/40 transition-colors">
-                      <td className="px-6 py-4 text-slate-500">{new Date(log.timestamp).toLocaleString()}</td>
-                      <td className="px-6 py-4 text-white font-bold">{log.userName}</td>
-                      <td className="px-6 py-4"><span className="px-2 py-1 bg-blue-500/10 text-blue-500 rounded text-[10px] uppercase font-bold tracking-tighter border border-blue-500/20">{log.action}</span></td>
-                      <td className="px-6 py-4 text-right text-slate-400 italic text-xs">{log.details}</td>
-                   </tr>
-                ))}
-                {auditLog.length === 0 && <tr><td colSpan={4} className="px-6 py-10 text-center text-slate-600 italic">No system telemetry recorded yet.</td></tr>}
-             </tbody>
-          </table>
-       </div>
-    </div>
-  );
+
 
   // --- Main Layout ---
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#020617] flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[120px]" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px]" />
+        </div>
+        
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md relative z-10"
+        >
+          <div className="glass-card bg-slate-900/40 border border-slate-800 p-10 rounded-[2.5rem] shadow-2xl backdrop-blur-xl">
+            <div className="flex flex-col items-center mb-10">
+              <div className="w-16 h-16 bg-purple-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-purple-500/20 mb-6">
+                <ShieldAlert className="text-white" size={32} />
+              </div>
+              <h1 className="text-3xl font-bold text-white tracking-tight">Welcome Back</h1>
+              <p className="text-slate-500 mt-2 font-medium">LexGuard Enterprise CLM</p>
+            </div>
+            
+            <form className="space-y-6" onSubmit={(e) => {
+              e.preventDefault();
+              const user = USERS.find(u => u.email === loginForm.email && u.password === loginForm.password);
+              if (user) {
+                setCurrentUser(user);
+                setIsAuthenticated(true);
+                addLogEntry('Authentication', `User ${user.name} logged in successfully.`);
+              } else {
+                alert('Invalid credentials. Try ian@lexguard.ai / password123');
+              }
+            }}>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Work Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                  <input 
+                    type="email" 
+                    value={loginForm.email}
+                    onChange={e => setLoginForm({...loginForm, email: e.target.value})}
+                    className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl pl-12 pr-6 py-4 text-sm text-white focus:ring-2 focus:ring-purple-600/50 outline-none transition-all shadow-inner" 
+                    placeholder="name@company.com"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Security Key</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                  <input 
+                    type="password" 
+                    value={loginForm.password}
+                    onChange={e => setLoginForm({...loginForm, password: e.target.value})}
+                    className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl pl-12 pr-6 py-4 text-sm text-white focus:ring-2 focus:ring-purple-600/50 outline-none transition-all shadow-inner" 
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between pt-2">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="w-4 h-4 rounded border border-slate-700 bg-slate-950 group-hover:border-purple-500 transition-colors" />
+                  <span className="text-xs text-slate-500 font-medium">Remember session</span>
+                </label>
+                <button type="button" className="text-xs text-purple-400 font-bold hover:text-purple-300 transition-colors">Recover Access</button>
+              </div>
+              
+              <button 
+                type="submit"
+                className="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-2xl font-bold shadow-xl shadow-purple-900/40 transition-all active:scale-[0.98] mt-4 flex items-center justify-center gap-2"
+              >
+                Authorize Access <ChevronRight size={18} />
+              </button>
+            </form>
+            
+            <div className="mt-10 pt-8 border-t border-slate-800/50 text-center">
+              <p className="text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em]">Restricted Government & Enterprise Access Only</p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-[#020617] text-slate-200 font-sans">
@@ -358,12 +268,292 @@ const App: React.FC = () => {
 
         <main className="flex-1 p-8 overflow-y-auto bg-[#020617] scrollbar-hide relative z-30">
           <AnimatePresence mode="wait">
-             {activeTab === 'dashboard' && <Dashboard />}
-             {activeTab === 'repository' && <RepositoryView />}
-             {activeTab === 'playbook' && <PlaybookView />}
-             {activeTab === 'users' && <IdentityView />}
-             {activeTab === 'settings' && <SettingsView />}
-             {activeTab === 'audit' && <AuditView />}
+             {activeTab === 'dashboard' && (
+               <div className="space-y-8 animate-fade-in">
+                 <div className="flex items-center justify-between">
+                    <div><h2 className="text-3xl font-bold text-white">Intelligence Dashboard</h2><p className="text-slate-500">Global Legal Operations</p></div>
+                    <div className="flex gap-2 bg-purple-500/10 p-2 rounded-xl border border-purple-500/20"><Sparkles className="text-purple-500 animate-pulse" size={16} /><span className="text-[10px] font-bold text-purple-400 uppercase">AI Reviewer Active</span></div>
+                 </div>
+                 <div className="grid grid-cols-4 gap-6">
+                   {[
+                     { label: 'In Queue', val: getAccessible().filter(c => c.status === 'In Queue').length, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+                     { label: 'Live', val: getAccessible().filter(c => c.status === 'Live').length, icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10' },
+                     { label: 'Reviewing', val: getAccessible().filter(c => c.status === 'Review').length, icon: Eye, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                     { label: 'Conflicts', val: conflicts.length, icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-500/10' }
+                   ].map((s, i) => (
+                     <div key={i} className="glass-card p-6 rounded-2xl border border-slate-800 transition-all hover:scale-105">
+                        <div className={`w-12 h-12 ${s.bg} rounded-xl flex items-center justify-center mb-4`}><s.icon className={s.color} size={24} /></div>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{s.label}</p>
+                        <h3 className="text-4xl font-bold text-white mt-1">{s.val}</h3>
+                     </div>
+                   ))}
+                 </div>
+                 <div className="grid grid-cols-12 gap-8">
+                    <div className="col-span-8 glass-card rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+                       <div className="p-6 border-b border-slate-800 bg-slate-900/20 flex items-center justify-between"><h3 className="text-lg font-bold text-white">Active Repository</h3><Search size={16} className="text-slate-500" /></div>
+                       <table className="w-full text-left text-sm">
+                         <thead className="bg-slate-900/50 text-slate-500 text-[10px] uppercase font-bold tracking-widest">
+                            <tr><th className="px-6 py-4">Contract</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">BU</th><th className="px-6 py-4 text-right">Value</th></tr>
+                         </thead>
+                         <tbody className="divide-y divide-slate-800">
+                            {filtered.map(c => (
+                              <tr key={c.id} className="hover:bg-slate-900/40 cursor-pointer group" onClick={() => { setCurrentContract(c); setContractContent(c.content || ""); setActiveTab('contract'); }}>
+                                <td className="px-6 py-4 font-bold text-white group-hover:text-blue-400 transition-colors">{c.title}</td>
+                                <td className="px-6 py-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${c.status === 'Live' ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-500'}`}>{c.status}</span></td>
+                                <td className="px-6 py-4 text-slate-500">{c.businessUnit}</td>
+                                <td className="px-6 py-4 text-right font-mono text-blue-400">{c.value}</td>
+                              </tr>
+                            ))}
+                         </tbody>
+                       </table>
+                    </div>
+                    <div className="col-span-4 space-y-6">
+                       <div className="glass-card p-6 rounded-2xl border border-slate-800 shadow-xl">
+                          <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2"><PieChart className="text-purple-500" size={20} /> Compliance Pulse</h3>
+                          <div className="space-y-4">
+                             <div><div className="flex justify-between text-[10px] font-bold uppercase text-slate-500 mb-2"><span>Standardization</span><span>88%</span></div><div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-green-500 w-[88%]" /></div></div>
+                             <div><div className="flex justify-between text-[10px] font-bold uppercase text-slate-500 mb-2"><span>Risk Exposure</span><span>Medium</span></div><div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-amber-500 w-[45%]" /></div></div>
+                          </div>
+                       </div>
+                       <div className="glass-card p-6 rounded-2xl border border-slate-800 shadow-xl">
+                          <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2"><Activity className="text-blue-500" size={20} /> Event Stream</h3>
+                          <div className="space-y-4">
+                             {auditLog.slice(0, 4).map(log => (
+                                <div key={log.id} className="flex gap-3"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5" /><div><p className="text-xs text-white font-medium">{log.action}</p><p className="text-[10px] text-slate-500">{new Date(log.timestamp).toLocaleTimeString()}</p></div></div>
+                             ))}
+                             {auditLog.length === 0 && <p className="text-xs text-slate-600 italic">Listening for system events...</p>}
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+               </div>
+             )}
+             {activeTab === 'repository' && (
+               <div className="space-y-8 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                     <h2 className="text-3xl font-bold text-white">Digital Vault</h2>
+                     <div className="flex gap-4">
+                        <select value={repoFilter.bu} onChange={e => setRepoFilter({...repoFilter, bu: e.target.value})} className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-300 outline-none focus:ring-1 focus:ring-purple-500 transition-all">
+                           <option value="All">All Business Units</option>
+                           {tags.BUs.map(bu => <option key={bu} value={bu}>{bu}</option>)}
+                        </select>
+                     </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4">
+                     {filtered.map(c => (
+                        <div key={c.id} className="glass-card p-6 rounded-2xl border border-slate-800 hover:border-blue-600 transition-all cursor-pointer flex items-center justify-between group" onClick={() => { setCurrentContract(c); setContractContent(c.content || ""); setActiveTab('contract'); }}>
+                           <div className="flex items-center gap-6">
+                              <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><FolderOpen size={24} /></div>
+                              <div><h4 className="font-bold text-white text-lg group-hover:text-blue-400 transition-colors">{c.title}</h4><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{c.businessUnit} • {c.department} • {c.category || 'Standard'}</p></div>
+                           </div>
+                           <div className="flex items-center gap-8">
+                              <div className="text-right hidden sm:block"><p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Last Modified By</p><p className="text-xs text-slate-300 font-medium">{c.lastModifiedBy}</p></div>
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${c.status === 'Live' ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-500'}`}>{c.status}</span>
+                              <ChevronRight className="text-slate-700 group-hover:text-white transition-colors" />
+                           </div>
+                        </div>
+                     ))}
+                  </div>
+               </div>
+             )}
+             {activeTab === 'playbook' && (
+               <div className="animate-fade-in space-y-8">
+                  <div className="flex items-center justify-between">
+                     <h2 className="text-3xl font-bold text-white">Playbook Architecture</h2>
+                     <button onClick={() => { setEditingClause({ id: Math.random().toString(36).substr(2, 9), title: '', description: '', preferredLanguage: '', riskLevel: 'Low' }); setShowPlaybookModal(true); }} className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-500/20 transition-all hover:scale-105 active:scale-95"><PlusCircle size={16} /> Define Clause</button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-6">
+                     {playbook.map(p => (
+                        <div key={p.id} className="glass-card p-6 rounded-2xl border border-slate-800 group relative overflow-hidden transition-all hover:border-purple-600/50">
+                           <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-all flex gap-2">
+                              <button onClick={() => { setEditingClause(p); setShowPlaybookModal(true); }} className="p-1.5 bg-slate-800 rounded hover:text-white transition-colors shadow-lg"><Edit2 size={14} /></button>
+                              <button onClick={() => { setPlaybook(playbook.filter(x => x.id !== p.id)); addLogEntry('Playbook Delete', `Removed clause: ${p.title}`); }} className="p-1.5 bg-slate-800 rounded hover:text-red-500 transition-colors shadow-lg"><Trash2 size={14} /></button>
+                           </div>
+                           <div className={`text-[8px] font-bold px-2 py-0.5 rounded-full uppercase mb-4 inline-block tracking-widest ${p.riskLevel === 'High' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20'}`}>{p.riskLevel} Risk</div>
+                           <h4 className="font-bold text-white mb-2">{p.title}</h4>
+                           <p className="text-xs text-slate-500 mb-4 line-clamp-3 leading-relaxed">{p.description}</p>
+                           <div className="p-4 bg-slate-950/50 rounded-xl text-[10px] text-blue-400 font-mono italic border border-slate-800 group-hover:border-purple-500/30 transition-all">"{p.preferredLanguage}"</div>
+                        </div>
+                     ))}
+                  </div>
+               </div>
+             )}
+             {activeTab === 'users' && (
+                <div className="animate-fade-in space-y-12">
+                   <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-3xl font-bold text-white">Identity Governance</h2>
+                        <p className="text-slate-500 font-medium mt-1">Manage organizational access and security protocols.</p>
+                      </div>
+                      <button onClick={() => { setEditingUser({ id: Math.random().toString(36).substr(2, 9), name: '', email: '', role: '', color: '#3b82f6', allowedBUs: [] }); setShowUserModal(true); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all hover:scale-105"><UserPlus size={16} /> Invite Member</button>
+                   </div>
+
+                   <div className="grid grid-cols-12 gap-8">
+                     <div className="col-span-8">
+                       <div className="glass-card rounded-[2rem] border border-slate-800 overflow-hidden shadow-2xl">
+                          <table className="w-full text-left text-sm">
+                             <thead className="bg-slate-900/50 text-slate-500 text-[10px] uppercase font-bold tracking-widest">
+                                <tr><th className="px-6 py-4">Identity</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Role</th><th className="px-6 py-4">BU Restrictions</th><th className="px-6 py-4 text-right">Actions</th></tr>
+                             </thead>
+                             <tbody className="divide-y divide-slate-800">
+                                {appUsers.map(u => (
+                                   <tr key={u.id} className="hover:bg-slate-900/40 group transition-colors">
+                                      <td className="px-6 py-4 font-bold text-white flex items-center gap-3"><div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg" style={{ backgroundColor: u.color }}>{u.name?.[0]}</div>{u.name}</td>
+                                      <td className="px-6 py-4 text-slate-400 text-xs">{u.email}</td>
+                                      <td className="px-6 py-4 text-slate-400 font-medium">{u.role}</td>
+                                      <td className="px-6 py-4">
+                                         <div className="flex flex-wrap gap-1">
+                                            {(u.allowedBUs || []).map(bu => <span key={bu} className="px-2 py-0.5 bg-blue-500/10 text-blue-500 rounded text-[8px] font-bold border border-blue-500/20">{bu}</span>)}
+                                            {(!u.allowedBUs || u.allowedBUs.length === 0) && <span className="text-[8px] text-slate-600 font-bold uppercase italic tracking-widest">Global Access</span>}
+                                         </div>
+                                      </td>
+                                      <td className="px-6 py-4 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                                         <div className="flex justify-end gap-2">
+                                            <button onClick={() => { setEditingUser(u); setShowUserModal(true); }} className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all"><Edit2 size={14} /></button>
+                                            <button onClick={() => { setAppUsers(appUsers.filter(x => x.id !== u.id)); addLogEntry('Identity Revoke', `Revoked access for: ${u.name}`); }} className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-red-500 transition-all"><Trash2 size={14} /></button>
+                                         </div>
+                                      </td>
+                                   </tr>
+                                ))}
+                             </tbody>
+                          </table>
+                       </div>
+                     </div>
+
+                     <div className="col-span-4">
+                       <div className="glass-card p-8 rounded-[2rem] border border-slate-800 shadow-2xl relative overflow-hidden">
+                         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+                         <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Lock className="text-blue-500" size={20} /> Security Settings</h3>
+                         
+                         <div className="space-y-6">
+                           <div className="p-4 bg-slate-950/50 rounded-2xl border border-slate-800 flex items-center gap-4 mb-6">
+                             <div className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold bg-blue-600 text-white shadow-lg">{currentUser?.name?.[0]}</div>
+                             <div>
+                               <p className="text-sm font-bold text-white">{currentUser?.name}</p>
+                               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{currentUser?.role}</p>
+                             </div>
+                           </div>
+
+                           <div className="space-y-4">
+                             <div className="space-y-2">
+                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Current Password</label>
+                               <input 
+                                type="password" 
+                                value={passwordChange.current}
+                                onChange={e => setPasswordChange({...passwordChange, current: e.target.value})}
+                                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white outline-none focus:ring-1 focus:ring-blue-500 transition-all" 
+                               />
+                             </div>
+                             <div className="space-y-2">
+                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">New Password</label>
+                               <input 
+                                type="password" 
+                                value={passwordChange.new}
+                                onChange={e => setPasswordChange({...passwordChange, new: e.target.value})}
+                                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white outline-none focus:ring-1 focus:ring-blue-500 transition-all" 
+                               />
+                             </div>
+                             <div className="space-y-2">
+                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Confirm New Password</label>
+                               <input 
+                                type="password" 
+                                value={passwordChange.confirm}
+                                onChange={e => setPasswordChange({...passwordChange, confirm: e.target.value})}
+                                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white outline-none focus:ring-1 focus:ring-blue-500 transition-all" 
+                               />
+                             </div>
+                             
+                             <button 
+                              onClick={() => {
+                                if (passwordChange.new !== passwordChange.confirm) {
+                                  alert('Passwords do not match!');
+                                  return;
+                                }
+                                if (passwordChange.new.length < 8) {
+                                  alert('Password must be at least 8 characters.');
+                                  return;
+                                }
+                                // In a real app, verify current password and call API
+                                setShowPasswordSuccess(true);
+                                setPasswordChange({ current: '', new: '', confirm: '' });
+                                addLogEntry('Security Update', `Password changed for ${currentUser?.name}`);
+                                setTimeout(() => setShowPasswordSuccess(false), 3000);
+                              }}
+                              className="w-full bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl text-xs font-bold transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2"
+                             >
+                               Update Password
+                             </button>
+
+                             <AnimatePresence>
+                               {showPasswordSuccess && (
+                                 <motion.div 
+                                  initial={{ opacity: 0, y: 10 }} 
+                                  animate={{ opacity: 1, y: 0 }} 
+                                  exit={{ opacity: 0 }}
+                                  className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-2 text-green-500 text-[10px] font-bold uppercase tracking-wider justify-center"
+                                 >
+                                   <CheckCircle size={14} /> Password Updated Successfully
+                                 </motion.div>
+                               )}
+                             </AnimatePresence>
+                           </div>
+                           
+                           <div className="pt-4">
+                             <button 
+                              onClick={() => { setIsAuthenticated(false); setCurrentUser(null); }}
+                              className="w-full border border-red-500/30 hover:bg-red-500/10 text-red-500 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                             >
+                               <LogOut size={14} /> Terminate Session
+                             </button>
+                           </div>
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                </div>
+             )}
+             {activeTab === 'settings' && (
+                <div className="animate-fade-in space-y-8 max-w-5xl">
+                   <h2 className="text-3xl font-bold text-white">Global Taxonomy</h2>
+                   <div className="grid grid-cols-3 gap-8">
+                      <div className="glass-card p-6 rounded-2xl border border-slate-800 shadow-xl">
+                         <div className="flex items-center justify-between mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Building size={18} className="text-blue-500" /> Business Units</h3><button onClick={() => setShowTagModal({ type: 'BUs' })} className="text-blue-500 hover:text-blue-400 transition-colors"><Plus size={20} /></button></div>
+                         <div className="space-y-2">{tags.BUs.map(bu => <div key={bu} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl group transition-all hover:border-blue-500/30"><span className="text-xs text-slate-300 font-medium">{bu}</span><button onClick={() => setTags({...tags, BUs: tags.BUs.filter(x => x !== bu)})} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-500 transition-opacity"><X size={14} /></button></div>)}</div>
+                      </div>
+                      <div className="glass-card p-6 rounded-2xl border border-slate-800 shadow-xl">
+                         <div className="flex items-center justify-between mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Layers size={18} className="text-purple-500" /> Departments</h3><button onClick={() => setShowTagModal({ type: 'Depts' })} className="text-purple-500 hover:text-purple-400 transition-colors"><Plus size={20} /></button></div>
+                         <div className="space-y-2">{tags.Depts.map(d => <div key={d} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl group transition-all hover:border-purple-500/30"><span className="text-xs text-slate-300 font-medium">{d}</span><button onClick={() => setTags({...tags, Depts: tags.Depts.filter(x => x !== d)})} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-500 transition-opacity"><X size={14} /></button></div>)}</div>
+                      </div>
+                      <div className="glass-card p-6 rounded-2xl border border-slate-800 shadow-xl">
+                         <div className="flex items-center justify-between mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Tag size={18} className="text-amber-500" /> Categories</h3><button onClick={() => setShowTagModal({ type: 'Categories' })} className="text-amber-500 hover:text-amber-400 transition-colors"><Plus size={20} /></button></div>
+                         <div className="space-y-2">{tags.Categories.map(c => <div key={c} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl group transition-all hover:border-amber-500/30"><span className="text-xs text-slate-300 font-medium">{c}</span><button onClick={() => setTags({...tags, Categories: tags.Categories.filter(x => x !== c)})} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-500 transition-opacity"><X size={14} /></button></div>)}</div>
+                      </div>
+                   </div>
+                </div>
+             )}
+             {activeTab === 'audit' && (
+                <div className="animate-fade-in space-y-8">
+                   <h2 className="text-3xl font-bold text-white flex items-center gap-3"><Terminal className="text-blue-500" /> Forensic Audit Trail</h2>
+                   <div className="glass-card rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+                      <table className="w-full text-left text-sm">
+                         <thead className="bg-slate-900/50 text-slate-500 text-[10px] uppercase font-bold tracking-widest">
+                            <tr><th className="px-6 py-4">Event Time</th><th className="px-6 py-4">Actor</th><th className="px-6 py-4">Action Type</th><th className="px-6 py-4 text-right">Details</th></tr>
+                         </thead>
+                         <tbody className="divide-y divide-slate-800 font-mono">
+                            {auditLog.map(log => (
+                               <tr key={log.id} className="hover:bg-slate-900/40 transition-colors">
+                                  <td className="px-6 py-4 text-slate-500">{new Date(log.timestamp).toLocaleString()}</td>
+                                  <td className="px-6 py-4 text-white font-bold">{log.userName}</td>
+                                  <td className="px-6 py-4"><span className="px-2 py-1 bg-blue-500/10 text-blue-500 rounded text-[10px] uppercase font-bold tracking-tighter border border-blue-500/20">{log.action}</span></td>
+                                  <td className="px-6 py-4 text-right text-slate-400 italic text-xs">{log.details}</td>
+                               </tr>
+                            ))}
+                            {auditLog.length === 0 && <tr><td colSpan={4} className="px-6 py-10 text-center text-slate-600 italic">No system telemetry recorded yet.</td></tr>}
+                         </tbody>
+                      </table>
+                   </div>
+                </div>
+             )}
              {activeTab === 'contract' && (
                 <div className="grid grid-cols-12 gap-8 h-full animate-fade-in">
                    <div className="col-span-8 flex flex-col gap-6">
@@ -449,7 +639,9 @@ const App: React.FC = () => {
               <div className="grid grid-cols-2 gap-8 relative z-10">
                  <div className="space-y-3"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Full Legal Name</label><input type="text" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl px-6 py-4 text-sm text-white focus:ring-2 focus:ring-blue-600/50 outline-none transition-all shadow-inner" /></div>
                  <div className="space-y-3"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Organizational Role</label><input type="text" value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value})} className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl px-6 py-4 text-sm text-white focus:ring-2 focus:ring-blue-600/50 outline-none transition-all shadow-inner" /></div>
+                 <div className="space-y-3 col-span-2"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Email Address</label><input type="email" value={editingUser.email || ''} onChange={e => setEditingUser({...editingUser, email: e.target.value})} className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl px-6 py-4 text-sm text-white focus:ring-2 focus:ring-blue-600/50 outline-none transition-all shadow-inner" placeholder="name@lexguard.ai" /></div>
               </div>
+
               <div className="flex justify-end gap-6 pt-6 relative z-10">
                  <button onClick={() => setShowUserModal(false)} className="text-slate-500 hover:text-white font-bold px-4 transition-colors">Discard changes</button>
                  <button onClick={() => {
